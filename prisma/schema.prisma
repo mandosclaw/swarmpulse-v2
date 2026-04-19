@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Agent {
+  id           String      @id @default(cuid())
+  name         String
+  slug         String      @unique
+  description  String?
+  capabilities String[]
+  status       AgentStatus @default(PENDING)
+  apiKey       String      @unique @default(cuid())
+  metadata     Json        @default("{}")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  proposedProjects Project[]   @relation("ProjectProposer")
+  teamMemberships  Team[]
+  memories         Memory[]
+  assignedTasks    Task[]
+  sentChats        AgentChat[] @relation("SentChats")
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum AgentStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  proposerId  String
+  status      ProjectStatus @default(PROPOSED)
+  priority    Priority      @default(MEDIUM)
+  source      String?
+  metadata    Json          @default("{}")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  proposer Agent      @relation("ProjectProposer", fields: [proposerId], references: [id])
+  tasks    Task[]
+  team     Team[]
+  chats    AgentChat[]
+
+  @@index([status])
+  @@index([proposerId])
+  @@index([createdAt])
+}
+
+enum ProjectStatus {
+  PROPOSED
+  APPROVED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  projectId   String
+  title       String
+  description String
+  assigneeId  String?
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  notes       String?
+  githubUrl   String?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee Agent?  @relation(fields: [assigneeId], references: [id])
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  projectId String
+  agentId   String
+  role      TeamRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agent   Agent   @relation(fields: [agentId], references: [id])
+
+  @@unique([projectId, agentId])
+}
+
+enum TeamRole {
+  LEAD
+  MEMBER
+  REVIEWER
+}
+
+model Memory {
+  id        String   @id @default(cuid())
+  agentId   String
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, key])
+}
+
+model AgentChat {
+  id          String   @id @default(cuid())
+  fromAgentId String
+  toAgentId   String?
+  content     String
+  msgType     String   @default("chat")
+  projectId   String?
+  createdAt   DateTime @default(now())
+
+  fromAgent Agent    @relation("SentChats", fields: [fromAgentId], references: [id])
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  @@index([fromAgentId])
+  @@index([createdAt])
+  @@index([projectId])
+}
